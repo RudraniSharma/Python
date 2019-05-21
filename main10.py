@@ -1,4 +1,3 @@
-
 import re
 import sys
 from ast import literal_eval
@@ -6,12 +5,13 @@ import numpy as np
 import os
 import random
 import matplotlib.pyplot as plt
-
+import operator
 
 num_of_cities = None
 RECHARGINGSTATIONS = None
 DISTANCE_MATRIX = None
 BAT_LIFE_UAVS = None
+
 ######################################################################## Generate  ###############################################################################################################
 
 def genPathVector(size):
@@ -100,6 +100,8 @@ def findmax(M):
 
 def evaluate_solution(path_vector):
     pos = 0
+    path_vector=np.array(path_vector)
+
     #current_city = path_vector[pos]
     M =  readDistanceMatrixTxt()
     nxt_city = path_vector[pos + 1]
@@ -139,20 +141,6 @@ def evaluate_fitnessWithBattery():
     path_vector = genPathVector(num_of_cities)
     dist = evaluate_solution(path_vector)
     return dist
-##################################################################################  Random Search  ##################################################################################
-def randomsearch():
-    best_vector = genPathVector(num_of_cities)
-    best_DIST = evaluate_solution(best_vector)
-
-    for i in range(10000):
-        new_vector = genPathVector(num_of_cities)
-        new_DIST = evaluate_solution(new_vector)
-        if new_DIST < best_DIST     :
-            best_DIST = new_DIST
-            best_vector = new_vector
-    saveInitDatantoFinalFile("Result_RS_fitness"+".txt",best_DIST )
-    saveInitDatantoFinalFile("Result_RS_Vector" + ".txt", best_vector)
-    print("Best Distance for Random Search (Best Fitness)", best_DIST)
 
 ################################################################################## Evaluationary Algorithm-1-selction  ################################################################
 def select_Population(population,scores):
@@ -167,9 +155,9 @@ def select_Population(population,scores):
 def select_individual_by_tournament(population,scores):
         population_size = len(scores)
 
-        fighter_1 = random.randint(0, population_size - 1)
-        fighter_2 = random.randint(0, population_size - 1)
-
+        fighter_1 = random.randint(2, population_size - 1)
+        fighter_2 = random.randint(2, population_size - 1)
+        #print("F2!", fighter_2)
         fighter_1_fitness = scores[fighter_1]
         fighter_2_fitness = scores[fighter_2]
 
@@ -213,9 +201,9 @@ def ordered_crossover(parent_1, parent_2):
 def crossover_population(population):
     cross_pop=[]
     population_size = len(population)
-    for ind in range(0, len(population)):
-        parent1=population[random.randint(0, population_size - 1)]
-        parent2=population[random.randint(0, population_size - 1)]
+    for ind in range(int(population_size/2)):
+        parent1=population[random.randint(2, population_size - 1)]
+        parent2=population[random.randint(2, population_size - 1)]
         CrossInd1,CrossInd2= ordered_crossover(parent1,parent2)
         cross_pop.append(CrossInd1)
         cross_pop.append(CrossInd2)
@@ -223,8 +211,7 @@ def crossover_population(population):
 #######################################################################3-mutation#################################################################################################
 def swap_mutation(individ, mutation_intensity):
     for _ in range(int(len(individ) * mutation_intensity)):
-        if random.random() > 0.5:
-            ix = np.random.choice(len(individ), 2, replace=False)
+            ix = np.random.choice(range(1,len(individ)), 2, replace=True)
             tmp = individ[ix[0]]
             individ[ix[0]] = individ[ix[1]]
             individ[ix[1]] = tmp
@@ -237,52 +224,71 @@ def mutatePopulation(population, mutationRate):
         mutatedPop.append(mutatedInd)
     return mutatedPop
 ##########################################################################4-replacement####################################################################################
-def replacement(Q,P):
-    P2=[]
-    P1 = P+Q
-    #print("p1",P1)
-    P2.append(P1[1])
-    for ind in range(1, (len(P1)-1)):
-        for ind1 in range(ind+1, (len(P1))):
-            if P1[ind] != P1[ind1]:
-               P2.append(P1[ind1])
-               ind1+=1
-        ind+=1
-    return P1
 
 def replacement1(Q,P):
-    P = np.array(Q)
-    return P
+    P1 = Q + P
+    P2=[]
+    P2=sort_for_replacement(P1)
+    #print("P2",P2)
+    P3=[]
+    P3.append(P2[0])
+    for i in range(1,(len(P2)-1)):
+        #print("i",i)
+        if P3[-1]!= P2[i]:
+           P3.append(P2[i])
+        if len(P3)==len(Q):
+           break;
+    while (len(P3)) < (len(Q)):
+         P3.append(generate_population(num_of_cities,(len(Q)-len(P3))))
+    return P3
 
+def sort_for_replacement(Q):
+    fitness = evaluate_fitnessWithBattery1(Q)
+    list1 = Q
+    list2 = fitness
+    merged_list = [(list1[i], list2[i]) for i in range(0, len(list1))]
+    lst = len(merged_list)
+    for i in range(0, lst):
+        for j in range(0, lst - i - 1):
+            if (merged_list[j][1] > merged_list[j + 1][1]):
+                temp = merged_list[j]
+                merged_list[j] = merged_list[j + 1]
+                merged_list[j + 1] = temp
+    list1 = []
+    list2 = []
+    for i in merged_list:
+        list1.append(i[0])
+        list2.append(i[1])
+
+    return list1
 
 ###############################################################################5-replacement##############################################################################
 def ga_method():
   mutation_probability = 0.1
   population_size = 20
-  no_of_evaluation=0
+  no_of_evaluation=20 #initialization
   best_fit_progress=[]
-  Q = []
   P = generate_population(num_of_cities, population_size)
   scores = evaluate_fitnessWithBattery1(P)
   best_fit = findmax(readDistanceMatrixTxt())
   best_ind = []
-  while no_of_evaluation < 12:
+  while no_of_evaluation < 2000:
       Q = select_Population(P, scores)
       Q = crossover_population(Q)
       Q = mutatePopulation(Q, mutation_probability)
       P = replacement1(Q, P)
-      for i in P:
-          new_fit = evaluate_solution(i)
-          if new_fit < best_fit:
+      new_ind=P[0]
+      new_fit=evaluate_solution(P[0])
+      if new_fit < best_fit:
               best_fit = new_fit
-              best_ind = i
+              best_ind = new_ind
       #print("till now best",best_fit)
       # Plot progress
       best_fit_progress.append(best_fit)
       plt.plot(best_fit_progress)
       plt.xlabel('number of Evalution')
       plt.ylabel('Best fitness (% target)')
-      no_of_evaluation+=1
+      no_of_evaluation+=20
   print("Best fitness for Genetic Algorithm", best_fit)
   return best_fit, best_ind
 
@@ -291,10 +297,24 @@ def GAalgorithm():
     fitness,vector = ga_method()
     saveInitDatantoFinalFile("Result_EA_Fitness"+".txt",fitness)
     saveInitDatantoFinalFile("Result_EA_vector" + ".txt", vector)
-    plt.show()
-    #print("Best fitness for Genetic Algorithm", fitness)
+    #plt.show()
     return fitness
+##################################################################################  Random Search  ##################################################################################
+def randomsearch():
+    best_vector = genPathVector(num_of_cities)
+    best_DIST = evaluate_solution(best_vector)
+
+    for i in range(2000):
+        new_vector = genPathVector(num_of_cities)
+        new_DIST = evaluate_solution(new_vector)
+        if new_DIST < best_DIST     :
+            best_DIST = new_DIST
+            best_vector = new_vector
+    saveInitDatantoFinalFile("Result_RS_fitness"+".txt",best_DIST )
+    saveInitDatantoFinalFile("Result_RS_Vector" + ".txt", best_vector)
+    print("Best Distance for Random Search (Best Fitness)", best_DIST)
 ##################################################################################  Main  ##################################################################################
+
 num_of_cities = readnum_of_cities()
 RECHARGINGSTATIONS = readRechargingStationsVector()
 DISTANCE_MATRIX = readDistanceMatrixTxt()
